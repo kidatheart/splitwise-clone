@@ -22,7 +22,7 @@ export default function DashboardPage() {
         return;
       }
 
-      setUser({ email: data.user.email });
+      setUser({ email: data.user.email ?? null });
       setIsLoading(false);
     };
 
