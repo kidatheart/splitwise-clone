@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { GroupBalances } from '@/components/GroupBalances';
 
 type AuthUser = {
   id: string;
@@ -350,6 +351,8 @@ export default function GroupDetailPage() {
             </ul>
           )}
         </section>
+
+        <GroupBalances groupId={group.id} />
 
         <section className="bg-white rounded-xl shadow-sm p-6 space-y-4">
           <div className="flex items-center justify-between">
