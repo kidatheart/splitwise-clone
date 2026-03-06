@@ -40,6 +40,19 @@ type Expense = {
   splits: ExpenseSplit[];
 };
 
+type Payment = {
+  id: string;
+  paymentId: string;
+  amount: number;
+  currency: string;
+  payerId: string;
+  payerEmail: string | null;
+  receiverId: string;
+  receiverEmail: string | null;
+  status: string;
+  createdAt: string;
+};
+
 export default function GroupDetailPage() {
   const router = useRouter();
   const params = useParams<{ groupId: string }>();
@@ -52,6 +65,7 @@ export default function GroupDetailPage() {
   const [expandedExpenseId, setExpandedExpenseId] = useState<string | null>(
     null
   );
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -238,6 +252,68 @@ export default function GroupDetailPage() {
         })) ?? [];
 
       setExpenses(mappedExpenses);
+
+      // 6. Load payment history for this group
+      const { data: paymentRows, error: paymentsError } = await supabase
+        .from('payments')
+        .select(
+          'id, payment_id, amount, currency, payer_id, receiver_id, group_id, status, created_at'
+        )
+        .eq('group_id', groupId)
+        .order('created_at', { ascending: false });
+
+      if (paymentsError) {
+        setError('Could not load payment history.');
+        setIsLoading(false);
+        return;
+      }
+
+      if (!paymentRows || paymentRows.length === 0) {
+        setPayments([]);
+        setIsLoading(false);
+        return;
+      }
+
+      // collect payer/receiver ids so we can show emails
+      const paymentUserIds = new Set<string>();
+      paymentRows.forEach((p: any) => {
+        paymentUserIds.add(p.payer_id as string);
+        paymentUserIds.add(p.receiver_id as string);
+      });
+
+      const { data: paymentProfiles, error: paymentProfilesError } =
+        await supabase
+          .from('profiles')
+          .select('id, email')
+          .in('id', Array.from(paymentUserIds));
+
+      if (paymentProfilesError) {
+        setError('Could not load payment participant details.');
+        setIsLoading(false);
+        return;
+      }
+
+      const paymentEmailByUserId = new Map<string, string | null>();
+      (paymentProfiles ?? []).forEach((p) => {
+        paymentEmailByUserId.set(p.id as string, (p as any).email ?? null);
+      });
+
+      const mappedPayments: Payment[] =
+        paymentRows?.map((p: any) => ({
+          id: p.id as string,
+          paymentId: p.payment_id as string,
+          amount: Number(p.amount),
+          currency: p.currency as string,
+          payerId: p.payer_id as string,
+          payerEmail: paymentEmailByUserId.get(p.payer_id as string) ?? null,
+          receiverId: p.receiver_id as string,
+          receiverEmail:
+            paymentEmailByUserId.get(p.receiver_id as string) ?? null,
+          status: p.status as string,
+          createdAt: p.created_at as string,
+        })) ?? [];
+
+      setPayments(mappedPayments);
       setIsLoading(false);
     };
 
@@ -483,6 +559,86 @@ export default function GroupDetailPage() {
                 );
               })}
             </div>
+          )}
+        </section>
+
+        {/* Payment history */}
+        <section className="bg-white rounded-xl shadow-sm p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-900">
+              Payment history
+            </h2>
+            {payments.length > 0 && (
+              <p className="text-xs text-gray-500">
+                Showing {payments.length}{' '}
+                {payments.length === 1 ? 'payment' : 'payments'}
+              </p>
+            )}
+          </div>
+
+          {payments.length === 0 ? (
+            <p className="text-sm text-gray-600">
+              No payments made yet.
+            </p>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {payments.map((payment) => {
+                const isCompleted = payment.status === 'completed';
+                const payerLabel =
+                  payment.payerEmail ?? payment.payerId.slice(0, 6) + '...';
+                const receiverLabel =
+                  payment.receiverEmail ??
+                  payment.receiverId.slice(0, 6) + '...';
+
+                return (
+                  <li
+                    key={payment.id}
+                    className="flex flex-col gap-2 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="space-y-1">
+                      <p className="text-gray-900">
+                        <span className="font-medium">{payerLabel}</span>{' '}
+                        paid{' '}
+                        <span className="font-medium">
+                          {receiverLabel}
+                        </span>{' '}
+                        <span className="font-semibold">
+                          ₹{payment.amount.toFixed(2)}
+                        </span>
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Payment ID:{' '}
+                        <span className="font-mono text-gray-700">
+                          {payment.paymentId}
+                        </span>
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {new Date(payment.createdAt).toLocaleString('en-IN', {
+                          timeZone: 'Asia/Kolkata',
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true,
+                        })}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                          isCompleted
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        {isCompleted ? 'Completed' : 'Failed'}
+                      </span>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </section>
       </div>

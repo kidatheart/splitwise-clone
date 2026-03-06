@@ -211,14 +211,16 @@ export default function AddCreditPage() {
 
       const splits = [
         {
+          // Payer: they pay cash, so their debt should go down -> positive credit split
           expense_id: expenseId,
           user_id: paidBy,
-          amount: -numericAmount,
+          amount: numericAmount,
         },
         {
+          // Receiver: they are owed less after receiving cash -> negative credit split
           expense_id: expenseId,
           user_id: paidTo,
-          amount: numericAmount,
+          amount: -numericAmount,
         },
       ];
 
